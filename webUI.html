@@ -1,0 +1,585 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NoteCraft AI - 把碎片录音变成结构化笔记</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #171a23;
+      --panel-2: #1f2430;
+      --text: #eef2ff;
+      --muted: #9aa4b2;
+      --primary: #6d5ef9;
+      --success: #19c37d;
+      --border: rgba(255,255,255,0.08);
+      --shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at top, #161a2e 0%, var(--bg) 45%);
+      color: var(--text);
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    .container {
+      width: min(1180px, calc(100% - 48px));
+      margin: 0 auto;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      backdrop-filter: blur(12px);
+      background: rgba(15,17,23,0.72);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 0;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    .logo span { color: var(--primary); }
+
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 12px 18px;
+      border-radius: 14px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      transition: .2s ease;
+    }
+
+    .btn.primary {
+      background: var(--primary);
+      border-color: transparent;
+      color: white;
+      box-shadow: 0 10px 30px rgba(109,94,249,.35);
+    }
+
+    .btn.secondary {
+      background: rgba(255,255,255,0.04);
+    }
+
+    .hero {
+      padding: 80px 0 48px;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 42px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(109,94,249,.12);
+      color: #c8c1ff;
+      border: 1px solid rgba(109,94,249,.24);
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 56px;
+      line-height: 1.08;
+      letter-spacing: -1.4px;
+    }
+
+    .hero p {
+      margin: 20px 0 28px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.8;
+    }
+
+    .preview {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .preview-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .dot-group { display: flex; gap: 8px; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: rgba(255,255,255,0.14);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 220px 1fr 280px;
+      min-height: 500px;
+    }
+
+    .sidebar, .main, .assistant {
+      padding: 18px;
+      border-right: 1px solid var(--border);
+    }
+
+    .assistant { border-right: none; background: rgba(255,255,255,0.02); }
+
+    .search, .panel, .mini-card, .tag, .price-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .search {
+      padding: 12px 14px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      font-size: 14px;
+    }
+
+    .note-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      color: #c9d2df;
+      background: rgba(255,255,255,0.03);
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .note-item.active {
+      background: rgba(109,94,249,.18);
+      color: white;
+      border: 1px solid rgba(109,94,249,.35);
+    }
+
+    .editor-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .editor-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .editor-box {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 18px;
+      color: #c9d2df;
+      line-height: 1.9;
+      min-height: 360px;
+    }
+
+    .panel {
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .panel h4 {
+      margin: 0 0 12px;
+      font-size: 15px;
+    }
+
+    .panel p, .panel li {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .section {
+      padding: 84px 0;
+    }
+
+    .section-title {
+      font-size: 38px;
+      margin: 0 0 14px;
+      text-align: center;
+    }
+
+    .section-subtitle {
+      max-width: 760px;
+      margin: 0 auto 44px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+
+    .feature-card, .scenario-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .feature-card h3, .scenario-card h3 {
+      margin: 12px 0 10px;
+      font-size: 20px;
+    }
+
+    .feature-card p, .scenario-card p {
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: rgba(109,94,249,.16);
+      color: #d7d2ff;
+      font-size: 20px;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .tag-cloud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .tag {
+      padding: 10px 14px;
+      color: #dbe4ef;
+      font-size: 13px;
+    }
+
+    .pricing {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .price-card {
+      padding: 28px;
+      background: rgba(255,255,255,0.03);
+      box-shadow: var(--shadow);
+    }
+
+    .price-card h3 { margin: 0 0 8px; }
+    .price {
+      font-size: 40px;
+      font-weight: 800;
+      margin: 8px 0 14px;
+    }
+
+    .price-card ul {
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 2;
+      font-size: 14px;
+    }
+
+    .cta {
+      text-align: center;
+      padding: 96px 0 120px;
+    }
+
+    .cta-box {
+      padding: 48px;
+      border-radius: 28px;
+      background: linear-gradient(135deg, rgba(109,94,249,.22), rgba(25,195,125,.14));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .cta h2 {
+      font-size: 42px;
+      margin: 0 0 14px;
+    }
+
+    .cta p {
+      max-width: 700px;
+      margin: 0 auto 24px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    footer {
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      padding: 28px 0 40px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 1080px) {
+      .hero, .two-col, .pricing, .grid-4, .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      h1 { font-size: 42px; }
+      .workspace { min-height: auto; }
+      .sidebar, .main, .assistant { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="container nav-inner">
+      <div class="logo">Note<span>Craft</span> AI</div>
+      <div class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#workspace">工作区</a>
+        <a href="#scenes">场景</a>
+        <a href="#pricing">定价</a>
+      </div>
+      <div class="btn-group">
+        <a class="btn secondary" href="#">登录</a>
+        <a class="btn primary" href="#">下载桌面版</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <section class="hero">
+      <div>
+        <div class="badge">AI 笔记 · 录音转写 · 复习卡片</div>
+        <h1>把碎片录音，变成<br/>结构化笔记</h1>
+        <p>
+          NoteCraft AI 帮你把课堂录音、会议内容和灵感记录，自动转写成文字，提炼摘要、生成大纲和标签，最终沉淀为真正可复习、可检索的知识。
+        </p>
+        <div class="btn-group">
+          <a class="btn primary" href="#pricing">免费开始</a>
+          <a class="btn secondary" href="#workspace">查看演示</a>
+        </div>
+      </div>
+
+      <div class="preview">
+        <div class="preview-top">
+          <div class="dot-group"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+          <div style="color:#9aa4b2;font-size:14px;">NoteCraft Desktop Preview</div>
+        </div>
+        <div class="workspace">
+          <div class="sidebar">
+            <div class="search">搜索笔记 / 标签</div>
+            <div class="note-item active">操作系统课堂笔记</div>
+            <div class="note-item">产品周会纪要</div>
+            <div class="note-item">市场调研录音</div>
+            <div class="note-item">灵感速记</div>
+          </div>
+          <div class="main">
+            <div class="editor-toolbar">
+              <div style="font-weight:700;">笔记编辑区</div>
+              <div class="btn-group">
+                <span class="btn secondary">录音</span>
+                <span class="btn secondary">上传</span>
+              </div>
+            </div>
+            <div class="editor-title">操作系统课堂笔记</div>
+            <div class="editor-box">
+              <strong>主题：</strong>进程与线程  <br/><br/>
+              1. 进程是资源分配的基本单位，线程是 CPU 调度的基本单位。<br/>
+              2. 同一进程内线程共享地址空间，但各自拥有独立栈。<br/>
+              3. 线程切换开销小于进程切换，更适合高并发任务。<br/><br/>
+              <strong>课堂补充：</strong> 老师强调了用户态与内核态切换带来的额外性能损耗。
+            </div>
+          </div>
+          <div class="assistant">
+            <div class="panel">
+              <h4>AI 摘要</h4>
+              <p>本节核心讲解了进程与线程的差异、资源分配与调度关系，以及为什么线程更适合高并发场景。</p>
+            </div>
+            <div class="panel">
+              <h4>AI 大纲</h4>
+              <ul>
+                <li>进程与线程定义</li>
+                <li>资源与调度模型</li>
+                <li>性能差异</li>
+                <li>课堂重点提醒</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h4>推荐标签</h4>
+              <div class="tag-cloud">
+                <div class="tag">操作系统</div>
+                <div class="tag">进程</div>
+                <div class="tag">线程</div>
+                <div class="tag">期末复习</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <section class="section" id="features">
+    <div class="container">
+      <h2 class="section-title">从记录到整理，再到复习</h2>
+      <p class="section-subtitle">不是简单保存文字，而是把碎片化输入整理成可持续使用的知识资产。</p>
+      <div class="grid-4">
+        <div class="feature-card">
+          <div class="icon">🎙</div>
+          <h3>录音转文字</h3>
+          <p>支持课堂、会议、灵感捕捉场景，快速把声音转成文字内容。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🧠</div>
+          <h3>AI 自动大纲</h3>
+          <p>将长段转写内容提炼为结构清晰、层级明确的重点大纲。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🏷</div>
+          <h3>智能标签</h3>
+          <p>允许用户自由创建标签，也可由 AI 自动推荐主题标签。</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🗂</div>
+          <h3>复习提醒</h3>
+          <p>自动生成问答卡片，帮助用户把笔记内容真正转化为记忆。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="workspace">
+    <div class="container">
+      <h2 class="section-title">一个页面，完成笔记全流程</h2>
+      <p class="section-subtitle">左侧查看历史笔记，中间整理正文，右侧让 AI 帮你生成摘要、大纲与标签。</p>
+      <div class="two-col">
+        <div class="scenario-card">
+          <h3>笔记工作区</h3>
+          <p>三栏布局适合桌面产品：左侧列表、中间编辑区、右侧 AI 辅助区。顶部支持录音与上传。</p>
+        </div>
+        <div class="scenario-card">
+          <h3>录音转写界面</h3>
+          <p>支持实时转写、时间戳、AI 整理进度状态，让用户知道系统正在做什么。</p>
+        </div>
+        <div class="scenario-card">
+          <h3>复习卡片界面</h3>
+          <p>自动把笔记转换成问答卡片，适合学生复习与会议知识回顾。</p>
+        </div>
+        <div class="scenario-card">
+          <h3>标签管理界面</h3>
+          <p>用户可自由创建标签，构建自己的知识分类体系，而不是被固定结构束缚。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="scenes">
+    <div class="container">
+      <h2 class="section-title">适用于课堂与会议</h2>
+      <p class="section-subtitle">不同输入场景，统一沉淀为结构化知识。</p>
+      <div class="two-col">
+        <div class="scenario-card">
+          <h3>学生课堂笔记</h3>
+          <p>录下老师讲解内容，自动转为文字并提炼考试重点，再一键生成复习卡片。</p>
+        </div>
+        <div class="scenario-card">
+          <h3>会议纪要</h3>
+          <p>把会议内容自动整理为讨论主题、决策项和待办事项，减少会后补纪要时间。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="pricing">
+    <div class="container">
+      <h2 class="section-title">简单透明的定价</h2>
+      <p class="section-subtitle">先让用户低门槛体验，再通过高频转写与复习功能建立付费习惯。</p>
+      <div class="pricing">
+        <div class="price-card">
+          <h3>免费版</h3>
+          <div class="price">¥0</div>
+          <ul>
+            <li>每月 10 次转写</li>
+            <li>基础笔记整理</li>
+            <li>标签管理</li>
+          </ul>
+        </div>
+        <div class="price-card" style="border:1px solid rgba(109,94,249,.4); background:rgba(109,94,249,.08);">
+          <h3>Pro</h3>
+          <div class="price">¥19.9<span style="font-size:16px; color:#9aa4b2;">/月</span></div>
+          <ul>
+            <li>无限转写</li>
+            <li>AI 大纲与摘要</li>
+            <li>复习卡片生成</li>
+            <li>优先模型处理</li>
+          </ul>
+        </div>
+        <div class="price-card">
+          <h3>团队版</h3>
+          <div class="price">联系销售</div>
+          <ul>
+            <li>共享知识库</li>
+            <li>会议纪要协同</li>
+            <li>团队标签体系</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <div class="cta-box">
+        <h2>停止堆积垃圾笔记，开始沉淀真正的知识</h2>
+        <p>从录音、转写、整理到复习，NoteCraft AI 帮你完成一整条高效率笔记工作流。</p>
+        <div class="btn-group" style="justify-content:center;">
+          <a class="btn primary" href="#">下载桌面版</a>
+          <a class="btn secondary" href="#">查看演示</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">© 2026 NoteCraft AI. Built for focused learning and meeting capture.</div>
+  </footer>
+</body>
+</html>
+```

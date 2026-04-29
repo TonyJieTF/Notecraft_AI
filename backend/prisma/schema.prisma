@@ -1,0 +1,493 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PlanType {
+  free
+  pro
+  team
+
+  @@map("plan_type")
+}
+
+enum NoteStatus {
+  draft
+  processing
+  ready
+  archived
+
+  @@map("note_status")
+}
+
+enum SourceKindType {
+  text
+  image
+  audio
+  video
+  import
+
+  @@map("source_kind_type")
+}
+
+enum MediaAssetType {
+  image
+  audio
+  video
+
+  @@map("media_asset_type")
+}
+
+enum JobStatusType {
+  queued
+  processing
+  success
+  failed
+
+  @@map("job_status_type")
+}
+
+enum JobTypeType {
+  summarize
+  outline
+  tag
+  ocr
+  asr
+  retrieve
+  review_generate
+  link_notes
+
+  @@map("job_type_type")
+}
+
+enum KnowledgeRelationType {
+  same_topic
+  follow_up
+  contradiction
+  supplement
+
+  @@map("knowledge_relation_type")
+}
+
+enum SearchModeType {
+  keyword
+  semantic
+  ai_chat
+
+  @@map("search_mode_type")
+}
+
+enum ReviewTaskType {
+  summary
+  qa
+  highlight
+  compare
+
+  @@map("review_task_type")
+}
+
+enum ReviewTaskStatus {
+  pending
+  done
+  skipped
+
+  @@map("review_task_status")
+}
+
+enum RewardTypeType {
+  points
+  badge
+  skin
+
+  @@map("reward_type_type")
+}
+
+enum ProcessingModeType {
+  local_first
+  cloud_enhanced
+
+  @@map("processing_mode_type")
+}
+
+model User {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String               @unique @db.VarChar(255)
+  passwordHash       String               @map("password_hash")
+  displayName        String?              @map("display_name") @db.VarChar(100)
+  avatarUrl          String?              @map("avatar_url")
+  plan               PlanType             @default(free)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  privacySetting     PrivacySetting?
+  notes              Note[]
+  mediaAssets        MediaAsset[]
+  tags               Tag[]
+  aiJobs             AiJob[]
+  searchSessions     SearchSession[]
+  flashcards         Flashcard[]
+  reviewLogs         ReviewLog[]
+  reviewTasks        ReviewTask[]
+  rewards            Reward[]
+  onboardingProgress OnboardingProgress[]
+
+  @@map("users")
+}
+
+model PrivacySetting {
+  userId             String              @id @map("user_id") @db.Uuid
+  processingMode     ProcessingModeType  @default(local_first) @map("processing_mode")
+  allowCloudAi       Boolean             @default(false) @map("allow_cloud_ai")
+  encryptLocalCache  Boolean             @default(true) @map("encrypt_local_cache")
+  autoDeleteDays     Int                 @default(30) @map("auto_delete_days")
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("privacy_settings")
+}
+
+model Note {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  title              String               @db.VarChar(255)
+  status             NoteStatus           @default(draft)
+  originalText       String?              @map("original_text")
+  cleanedText        String?              @map("cleaned_text")
+  aiSummary          String?              @map("ai_summary")
+  outlineJson        Json?                @map("outline_json")
+  sourceSummary      String?              @map("source_summary")
+  knowledgeScore     Decimal?             @map("knowledge_score") @db.Decimal(5, 2)
+  isSensitive        Boolean              @default(false) @map("is_sensitive")
+  isArchived         Boolean              @default(false) @map("is_archived")
+  lastOpenedAt       DateTime?            @map("last_opened_at") @db.Timestamptz(6)
+  lastReviewedAt     DateTime?            @map("last_reviewed_at") @db.Timestamptz(6)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteSources        NoteSource[]
+  mediaAssets        MediaAsset[]
+  ocrResults         OcrResult[]
+  asrResults         AsrResult[]
+  noteTags           NoteTag[]
+  aiJobs             AiJob[]
+  noteChunks         NoteChunk[]
+  noteEmbeddings     NoteEmbedding[]
+  outgoingLinks      KnowledgeLink[]      @relation("KnowledgeLinkSource")
+  incomingLinks      KnowledgeLink[]      @relation("KnowledgeLinkTarget")
+  searchHits         SearchHit[]
+  flashcards         Flashcard[]
+  reviewTasks        ReviewTask[]
+
+  @@index([userId], map: "idx_notes_user_id")
+  @@index([updatedAt(sort: Desc)], map: "idx_notes_updated_at")
+  @@index([lastOpenedAt(sort: Desc)], map: "idx_notes_last_opened_at")
+  @@index([userId, isSensitive], map: "idx_notes_sensitive")
+  @@index([userId, status], map: "idx_notes_status")
+  @@map("notes")
+}
+
+model NoteSource {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  sourceKind         SourceKindType       @map("source_kind")
+  sourceUri          String?              @map("source_uri")
+  sourceName         String?              @map("source_name") @db.VarChar(255)
+  mimeType           String?              @map("mime_type") @db.VarChar(100)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId], map: "idx_note_sources_note_id")
+  @@map("note_sources")
+}
+
+model MediaAsset {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  noteId             String?              @map("note_id") @db.Uuid
+  assetType          MediaAssetType       @map("asset_type")
+  storageKey         String               @map("storage_key")
+  fileUrl            String               @map("file_url")
+  durationSec        Int?                 @map("duration_sec")
+  fileSize           BigInt?              @map("file_size")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note               Note?                @relation(fields: [noteId], references: [id], onDelete: SetNull)
+  ocrResults         OcrResult[]
+  asrResults         AsrResult[]
+
+  @@index([noteId], map: "idx_media_assets_note_id")
+  @@index([userId], map: "idx_media_assets_user_id")
+  @@map("media_assets")
+}
+
+model OcrResult {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mediaAssetId       String               @map("media_asset_id") @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  fullText           String?              @map("full_text")
+  layoutJson         Json?                @map("layout_json")
+  status             JobStatusType        @default(queued)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt         DateTime?            @map("finished_at") @db.Timestamptz(6)
+
+  mediaAsset         MediaAsset           @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId], map: "idx_ocr_results_note_id")
+  @@map("ocr_results")
+}
+
+model AsrResult {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mediaAssetId       String               @map("media_asset_id") @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  language           String?              @default("zh") @db.VarChar(20)
+  fullText           String?              @map("full_text")
+  speakerCount       Int                  @default(1) @map("speaker_count")
+  status             JobStatusType        @default(queued)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt         DateTime?            @map("finished_at") @db.Timestamptz(6)
+
+  mediaAsset         MediaAsset           @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  asrSegments        AsrSegment[]
+
+  @@index([noteId], map: "idx_asr_results_note_id")
+  @@map("asr_results")
+}
+
+model AsrSegment {
+  id                 BigInt               @id @default(autoincrement())
+  asrResultId        String               @map("asr_result_id") @db.Uuid
+  startMs            Int                  @map("start_ms")
+  endMs              Int                  @map("end_ms")
+  speakerLabel       String?              @map("speaker_label") @db.VarChar(50)
+  content            String
+  confidence         Decimal?             @db.Decimal(4, 3)
+  sortOrder          Int                  @map("sort_order")
+
+  asrResult          AsrResult            @relation(fields: [asrResultId], references: [id], onDelete: Cascade)
+
+  @@index([asrResultId, sortOrder], map: "idx_asr_segments_result_order")
+  @@map("asr_segments")
+}
+
+model Tag {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  name               String               @db.VarChar(50)
+  color              String               @default("#6D5EF9") @db.VarChar(20)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  noteTags           NoteTag[]
+
+  @@unique([userId, name])
+  @@index([userId], map: "idx_tags_user_id")
+  @@map("tags")
+}
+
+model NoteTag {
+  noteId             String               @map("note_id") @db.Uuid
+  tagId              String               @map("tag_id") @db.Uuid
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag                Tag                  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, tagId])
+  @@index([tagId], map: "idx_note_tags_tag_id")
+  @@map("note_tags")
+}
+
+model AiJob {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  noteId             String?              @map("note_id") @db.Uuid
+  jobType            JobTypeType          @map("job_type")
+  inputSource        SourceKindType?      @map("input_source")
+  status             JobStatusType        @default(queued)
+  resultJson         Json?                @map("result_json")
+  errorMessage       String?              @map("error_message")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt         DateTime?            @map("finished_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note               Note?                @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, status], map: "idx_ai_jobs_note_status")
+  @@index([userId, createdAt(sort: Desc)], map: "idx_ai_jobs_user_created_at")
+  @@map("ai_jobs")
+}
+
+model NoteChunk {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  chunkIndex         Int                  @map("chunk_index")
+  chunkText          String               @map("chunk_text")
+  tokenCount         Int?                 @map("token_count")
+  sectionTitle       String?              @map("section_title") @db.VarChar(255)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  noteEmbeddings     NoteEmbedding[]
+
+  @@unique([noteId, chunkIndex])
+  @@index([noteId], map: "idx_note_chunks_note_id")
+  @@map("note_chunks")
+}
+
+model NoteEmbedding {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  chunkId            String               @map("chunk_id") @db.Uuid
+  modelName          String               @map("model_name") @db.VarChar(100)
+  vectorRef          String?              @map("vector_ref")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  chunk              NoteChunk            @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, modelName])
+  @@index([noteId], map: "idx_note_embeddings_note_id")
+  @@map("note_embeddings")
+}
+
+model KnowledgeLink {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceNoteId       String               @map("source_note_id") @db.Uuid
+  targetNoteId       String               @map("target_note_id") @db.Uuid
+  relationType       KnowledgeRelationType @map("relation_type")
+  confidenceScore    Decimal?             @map("confidence_score") @db.Decimal(4, 3)
+  reasonText         String?              @map("reason_text")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  sourceNote         Note                 @relation("KnowledgeLinkSource", fields: [sourceNoteId], references: [id], onDelete: Cascade)
+  targetNote         Note                 @relation("KnowledgeLinkTarget", fields: [targetNoteId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceNoteId, targetNoteId, relationType])
+  @@index([sourceNoteId], map: "idx_knowledge_links_source")
+  @@index([targetNoteId], map: "idx_knowledge_links_target")
+  @@map("knowledge_links")
+}
+
+model SearchSession {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  queryText          String               @map("query_text")
+  searchMode         SearchModeType       @map("search_mode")
+  answerSummary      String?              @map("answer_summary")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  searchHits         SearchHit[]
+
+  @@index([userId, createdAt(sort: Desc)], map: "idx_search_sessions_user_created_at")
+  @@map("search_sessions")
+}
+
+model SearchHit {
+  sessionId          String               @map("session_id") @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  rankOrder          Int                  @map("rank_order")
+  score              Decimal?             @db.Decimal(8, 4)
+
+  session            SearchSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, noteId])
+  @@index([sessionId, rankOrder], map: "idx_search_hits_session_rank")
+  @@map("search_hits")
+}
+
+model Flashcard {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  noteId             String               @map("note_id") @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  question           String
+  answer             String
+  difficulty         Int                  @default(2)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  note               Note                 @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reviewLogs         ReviewLog[]
+  reviewTasks        ReviewTask[]
+
+  @@index([noteId], map: "idx_flashcards_note_id")
+  @@index([userId], map: "idx_flashcards_user_id")
+  @@map("flashcards")
+}
+
+model ReviewLog {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flashcardId        String               @map("flashcard_id") @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  rating             Int
+  reviewedAt         DateTime             @default(now()) @map("reviewed_at") @db.Timestamptz(6)
+  nextReviewAt       DateTime?            @map("next_review_at") @db.Timestamptz(6)
+  intervalDays       Int                  @default(1) @map("interval_days")
+  easinessFactor     Decimal              @default(2.50) @map("easiness_factor") @db.Decimal(4, 2)
+  repetitionCount    Int                  @default(0) @map("repetition_count")
+
+  flashcard          Flashcard            @relation(fields: [flashcardId], references: [id], onDelete: Cascade)
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([flashcardId], map: "idx_review_logs_flashcard_id")
+  @@index([nextReviewAt], map: "idx_review_logs_next_review_at")
+  @@map("review_logs")
+}
+
+model ReviewTask {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  noteId             String?              @map("note_id") @db.Uuid
+  flashcardId        String?              @map("flashcard_id") @db.Uuid
+  taskType           ReviewTaskType       @map("task_type")
+  dueAt              DateTime             @map("due_at") @db.Timestamptz(6)
+  priority           Int                  @default(2)
+  status             ReviewTaskStatus     @default(pending)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  finishedAt         DateTime?            @map("finished_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  note               Note?                @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  flashcard          Flashcard?           @relation(fields: [flashcardId], references: [id], onDelete: SetNull)
+
+  @@index([userId, dueAt, status], map: "idx_review_tasks_user_due_status")
+  @@map("review_tasks")
+}
+
+model Reward {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String               @map("user_id") @db.Uuid
+  rewardType         RewardTypeType       @map("reward_type")
+  rewardName         String               @map("reward_name") @db.VarChar(100)
+  amount             Int                  @default(1)
+  sourceAction       String?              @map("source_action") @db.VarChar(30)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_rewards_user_id")
+  @@map("rewards")
+}
+
+model OnboardingProgress {
+  userId             String               @map("user_id") @db.Uuid
+  stepKey            String               @map("step_key") @db.VarChar(50)
+  completedAt        DateTime             @default(now()) @map("completed_at") @db.Timestamptz(6)
+
+  user               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, stepKey])
+  @@map("onboarding_progress")
+}
