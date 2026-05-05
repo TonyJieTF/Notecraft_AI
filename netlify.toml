@@ -3,7 +3,8 @@
   publish = "dist"
 
 [build.environment]
-  SECRETS_SCAN_OMIT_PATHS = "backend,database,notecraft-backend-scaffold"
+  SECRETS_SCAN_OMIT_PATHS = "backend/**,database/**,notecraft-backend-scaffold/**"
+  SECRETS_SCAN_OMIT_KEYS = "DATABASE_URL"
 
 [[redirects]]
   from = "/*"
